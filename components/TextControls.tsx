@@ -23,6 +23,7 @@ const TextControls: React.FC<Props> = ({ node, stage, onChange, onCenter }) => {
   const [letterSpacing, setLetterSpacing] = useState(node.letterSpacing);
   const [shadow, setShadow] = useState(node.shadow);
 
+  // keep local UI in sync with selected node
   useEffect(() => {
     setText(node.text);
     setFontSize(node.fontSize);
@@ -35,8 +36,17 @@ const TextControls: React.FC<Props> = ({ node, stage, onChange, onCenter }) => {
     setShadow(node.shadow);
   }, [node]);
 
+  // Stop key events (Backspace/Delete/etc.) from bubbling to global shortcuts
+  const stopIfEditable = (e: React.KeyboardEvent) => {
+    const el = e.target as HTMLElement | null;
+    const tag = el?.tagName?.toLowerCase();
+    if (tag === "input" || tag === "textarea" || el?.isContentEditable) {
+      e.stopPropagation();
+    }
+  };
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" onKeyDownCapture={stopIfEditable}>
       <div className="space-y-2">
         <label className="block text-sm font-medium">Text Content</label>
         <textarea
@@ -44,8 +54,10 @@ const TextControls: React.FC<Props> = ({ node, stage, onChange, onCenter }) => {
           rows={3}
           value={text}
           onChange={(e) => {
-            setText(e.target.value);
-            onChange({ text: e.target.value }, false);
+            const v = e.target.value;
+            setText(v);
+            // live-update the canvas as you type, but don't push history yet
+            onChange({ text: v }, false);
           }}
           onBlur={() => onChange({ text }, true)}
         />
@@ -95,8 +107,9 @@ const TextControls: React.FC<Props> = ({ node, stage, onChange, onCenter }) => {
             type="color"
             value={textColor}
             onChange={(e) => {
-              setTextColor(e.target.value);
-              onChange({ fill: e.target.value });
+              const v = e.target.value;
+              setTextColor(v);
+              onChange({ fill: v });
             }}
             className="w-10 h-10 rounded overflow-hidden"
           />
@@ -104,8 +117,9 @@ const TextControls: React.FC<Props> = ({ node, stage, onChange, onCenter }) => {
             type="text"
             value={textColor}
             onChange={(e) => {
-              setTextColor(e.target.value);
-              onChange({ fill: e.target.value });
+              const v = e.target.value;
+              setTextColor(v);
+              onChange({ fill: v });
             }}
             className="ml-2 flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
           />
@@ -219,7 +233,11 @@ const TextControls: React.FC<Props> = ({ node, stage, onChange, onCenter }) => {
               }}
             />
             <div className="relative w-11 h-6 bg-gray-700 rounded-full peer-checked:bg-blue-600">
-              <div className={`absolute top-[2px] left-[2px] h-5 w-5 rounded-full bg-white transition-transform ${shadow.enabled ? "translate-x-5" : ""}`} />
+              <div
+                className={`absolute top-[2px] left-[2px] h-5 w-5 rounded-full bg-white transition-transform ${
+                  shadow.enabled ? "translate-x-5" : ""
+                }`}
+              />
             </div>
           </label>
         </div>

@@ -12,13 +12,10 @@ type Props = {
 };
 
 function isEditableTarget(target: EventTarget | null): boolean {
-  const el = target as (HTMLElement | null);
+  const el = target as HTMLElement | null;
   if (!el) return false;
   const tag = el.tagName?.toLowerCase();
-  if (tag === "input" || tag === "textarea" || (el as HTMLElement).isContentEditable) {
-    return true;
-  }
-  return false;
+  return tag === "input" || tag === "textarea" || el.isContentEditable;
 }
 
 const KeyboardShortcuts: React.FC<Props> = ({
@@ -31,7 +28,7 @@ const KeyboardShortcuts: React.FC<Props> = ({
 }) => {
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      // don't hijack keys while the user is typing in a field
+      // Don’t handle shortcuts while typing in inputs/textarea/contenteditable
       if (isEditableTarget(e.target)) return;
 
       const mod = e.ctrlKey || e.metaKey;
@@ -67,11 +64,8 @@ const KeyboardShortcuts: React.FC<Props> = ({
       // undo / redo
       if (mod && e.key.toLowerCase() === "z") {
         e.preventDefault();
-        if (e.shiftKey) {
-          onRedo();
-        } else {
-          onUndo();
-        }
+        if (e.shiftKey) onRedo();
+        else onUndo();
         return;
       }
       if (mod && e.key.toLowerCase() === "y") {

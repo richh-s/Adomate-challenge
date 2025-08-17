@@ -1,55 +1,91 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { ChevronDown, Search } from "lucide-react";
 
 interface FontSelectorProps {
   value?: string;
   onChange: (fontFamily: string) => void;
 }
 
-const GOOGLE_FONTS = [
+const API_KEY = "AIzaSyClJb5bio8gEWF3KWs_lH4oXGeSJ4E0xro"; // using your key
+
+const FALLBACK_FONTS = [
   "Open Sans","Roboto","Lato","Montserrat","Oswald","Raleway","Playfair Display","Merriweather",
   "Poppins","Source Sans Pro","Ubuntu","Nunito","Rubik","Work Sans","Dancing Script","Pacifico","Caveat","Satisfy"
 ];
 
+type WebfontItem = { family: string; variants?: string[]; category?: string };
+type WebfontResponse = { items?: WebfontItem[] };
+
 const FontSelector: React.FC<FontSelectorProps> = ({ value = "Open Sans", onChange }) => {
   const [selected, setSelected] = useState(value);
   const [open, setOpen] = useState(false);
-  const [loaded, setLoaded] = useState<string[]>([]);
+  const [families, setFamilies] = useState<string[]>(FALLBACK_FONTS);
+  const [loaded, setLoaded] = useState<Record<string, boolean>>({});
+  const [query, setQuery] = useState("");
 
-  // keep internal state in sync if the prop changes
+  // fetch all families on the client
+  useEffect(() => {
+    const url = `https://www.googleapis.com/webfonts/v1/webfonts?sort=popularity&key=${API_KEY}`;
+    fetch(url)
+      .then((r) => (r.ok ? r.json() : Promise.reject(r)))
+      .then((d: WebfontResponse) => {
+        const list = (d.items ?? []).map((it) => it.family);
+        if (list.length) setFamilies(list);
+      })
+      .catch(() => {
+        // keep fallback list on error
+      });
+  }, []);
+
+  // typed access to document.fonts
+  const docFonts: FontFaceSet | undefined = (typeof document !== "undefined"
+    ? (document as Document & { fonts?: FontFaceSet }).fonts
+    : undefined);
+
+  // lazy-load a single family from Google Fonts CSS2 endpoint
+  const ensureLoaded = useMemo(
+    () => async (family: string) => {
+      if (loaded[family]) return;
+
+      const id = `gf-${family.replace(/\s+/g, "-")}`;
+      if (!document.getElementById(id)) {
+        const link = document.createElement("link");
+        link.id = id;
+        link.rel = "stylesheet";
+        // tweak weights if you need fewer/more:
+        const weights = "300;400;500;600;700";
+        link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(family).replace(
+          /%20/g,
+          "+"
+        )}:wght@${weights}&display=swap`;
+        document.head.appendChild(link);
+      }
+
+      try {
+        await docFonts?.load?.(`400 1rem ${family}`);
+      } finally {
+        setLoaded((m) => ({ ...m, [family]: true }));
+      }
+    },
+    [loaded, docFonts]
+  );
+
+  // keep selected in sync if prop changes
   useEffect(() => {
     setSelected(value);
-  }, [value]);
+    // pre-load initial font
+    void ensureLoaded(value);
+  }, [value, ensureLoaded]);
 
+  // when menu opens, prefetch first page for nicer previews
   useEffect(() => {
-    // inject a single Google Fonts stylesheet for the listed families
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = `https://fonts.googleapis.com/css2?${GOOGLE_FONTS.map(
-      (f) => `family=${encodeURIComponent(f).replace(/%20/g, "+")}`
-    ).join("&")}&display=swap`;
-    document.head.appendChild(link);
+    if (!open) return;
+    families.slice(0, 20).forEach((f) => void ensureLoaded(f));
+  }, [open, families, ensureLoaded]);
 
-    // wait (if supported) until browser considers fonts ready, then mark as loaded
-    const load = async () => {
-      const fonts = (document as Document & { fonts?: FontFaceSet }).fonts;
-      try {
-        if (fonts?.ready) {
-          await fonts.ready;
-        }
-      } finally {
-        setLoaded(GOOGLE_FONTS);
-      }
-    };
-    void load();
-
-    // cleanup on unmount
-    return () => {
-      if (link.parentNode) link.parentNode.removeChild(link);
-    };
-  }, []);
+  const filtered = families.filter((f) => f.toLowerCase().includes(query.toLowerCase()));
 
   return (
     <div className="space-y-2">
@@ -69,18 +105,31 @@ const FontSelector: React.FC<FontSelectorProps> = ({ value = "Open Sans", onChan
 
         {open && (
           <div
-            className="absolute z-10 mt-1 w-full max-h-60 overflow-auto bg-gray-800 border border-gray-600 rounded shadow-lg"
+            className="absolute z-10 mt-1 w-full max-h-72 overflow-auto bg-gray-800 border border-gray-600 rounded shadow-lg"
             role="listbox"
           >
-            {loaded.map((font) => (
+            {/* search bar */}
+            <div className="sticky top-0 flex items-center gap-2 bg-gray-800 p-2 border-b border-gray-700">
+              <Search size={16} className="opacity-70" />
+              <input
+                className="w-full bg-transparent outline-none text-sm"
+                placeholder="Search fonts…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+
+            {filtered.map((font) => (
               <button
                 key={font}
                 type="button"
                 role="option"
                 aria-selected={font === selected}
                 className="w-full text-left px-3 py-2 hover:bg-gray-700"
-                style={{ fontFamily: font }}
-                onClick={() => {
+                style={{ fontFamily: loaded[font] ? font : "inherit" }}
+                onMouseEnter={() => void ensureLoaded(font)} // preview on hover
+                onClick={async () => {
+                  await ensureLoaded(font);
                   setSelected(font);
                   setOpen(false);
                   onChange(font);
@@ -89,6 +138,10 @@ const FontSelector: React.FC<FontSelectorProps> = ({ value = "Open Sans", onChan
                 {font}
               </button>
             ))}
+
+            {filtered.length === 0 && (
+              <div className="px-3 py-4 text-sm text-gray-300">No results.</div>
+            )}
           </div>
         )}
       </div>

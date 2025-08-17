@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { drawAll, getNodeBounds, exportCanvasPNG } from "@/lib/canvas";
+import { drawAll, getNodeBounds, exportCanvasPNG } from "../lib/canvas"; // <-- if your path is "@/lib/canvas", change back
 import type { SerializableState, StageSize, TextNode } from "@/lib/types";
 
 const START_SIZE: StageSize = { width: 960, height: 540 };
@@ -20,7 +20,13 @@ export function useCanvasEditor() {
 
   const [activePanel, setActivePanel] = useState<"text" | "layers" | "history">("text");
 
-  const dragStartRef = useRef<{ pointerX: number; pointerY: number; nodeX: number; nodeY: number } | null>(null);
+  // when dragging, store initial pointer & node positions
+  const dragStartRef = useRef<{
+    pointerX: number;
+    pointerY: number;
+    nodeX: number;
+    nodeY: number;
+  } | null>(null);
 
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -77,7 +83,7 @@ export function useCanvasEditor() {
       setTexts(data.texts);
       setSelectedId(null);
     } catch {
-      // ignore
+      // ignore bad snapshot
     }
   }, []);
 
@@ -105,42 +111,48 @@ export function useCanvasEditor() {
   }, [stage, bgUrl, texts, selectedId]);
 
   /* -------- image upload -------- */
-  const handleUpload = useCallback((file: File) => {
-    if (!file.type.includes("png")) {
-      alert("Only PNG files are supported");
-      return;
-    }
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      const maxW = 1200;
-      const maxH = 800;
-      const ratio = img.width / img.height;
-      let width = Math.min(maxW, img.width);
-      let height = width / ratio;
-      if (height > maxH) {
-        height = maxH;
-        width = height * ratio;
+  const handleUpload = useCallback(
+    (file: File) => {
+      if (!file.type.includes("png")) {
+        alert("Only PNG files are supported");
+        return;
       }
-      setStage({ width, height });
-      setBgUrl(url);
-      bgImageRef.current = img;
-      setSelectedId(null);
-      pushHistory();
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      alert("Could not load that image.");
-    };
-    img.src = url;
-  }, [pushHistory]);
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        const maxW = 1200;
+        const maxH = 800;
+        const ratio = img.width / img.height;
+        let width = Math.min(maxW, img.width);
+        let height = width / ratio;
+        if (height > maxH) {
+          height = maxH;
+          width = height * ratio;
+        }
+        setStage({ width, height });
+        setBgUrl(url);
+        bgImageRef.current = img;
+        setSelectedId(null);
+        pushHistory();
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        alert("Could not load that image.");
+      };
+      img.src = url;
+    },
+    [pushHistory]
+  );
 
-  const onFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) handleUpload(file);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  }, [handleUpload]);
+  const onFileInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) handleUpload(file);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    },
+    [handleUpload]
+  );
 
   /* -------- text ops -------- */
   const addText = useCallback(() => {
@@ -167,16 +179,21 @@ export function useCanvasEditor() {
     pushHistory();
   }, [pushHistory, stage.width, stage.height]);
 
-  const updateSelected = useCallback((patch: Partial<TextNode>, save = true) => {
-    if (!selectedId) return;
-    setTexts((prev) => prev.map((t) => (t.id === selectedId ? { ...t, ...patch } : t)));
-    if (save) pushHistory(false);
-  }, [selectedId, pushHistory]);
+  const updateSelected = useCallback(
+    (patch: Partial<TextNode>, save = true) => {
+      if (!selectedId) return;
+      setTexts((prev) => prev.map((t) => (t.id === selectedId ? { ...t, ...patch } : t)));
+      if (save) pushHistory(false);
+    },
+    [selectedId, pushHistory]
+  );
 
   const centerSelected = useCallback(() => {
     if (!selectedId) return;
     setTexts((prev) =>
-      prev.map((t) => (t.id === selectedId ? { ...t, x: stage.width / 2, y: stage.height / 2 } : t))
+      prev.map((t) =>
+        t.id === selectedId ? { ...t, x: stage.width / 2, y: stage.height / 2 } : t
+      )
     );
     pushHistory();
   }, [selectedId, stage.width, stage.height, pushHistory]);
@@ -193,119 +210,182 @@ export function useCanvasEditor() {
     setTexts((prev) => {
       const base = prev.find((t) => t.id === selectedId);
       if (!base) return prev;
-      const copy: TextNode = { ...base, id: crypto.randomUUID(), x: base.x + 20, y: base.y + 20 };
+      const copy: TextNode = {
+        ...base,
+        id: crypto.randomUUID(),
+        x: base.x + 20,
+        y: base.y + 20,
+      };
       return [...prev, copy];
     });
     pushHistory();
   }, [selectedId, pushHistory]);
 
   /* -------- z-order & visibility -------- */
-  const bringForward = useCallback((id: string) => {
-    setTexts((prev) => {
-      const idx = prev.findIndex((t) => t.id === id);
-      if (idx < 0 || idx === prev.length - 1) return prev;
-      const copy = [...prev];
-      const [item] = copy.splice(idx, 1);
-      copy.splice(idx + 1, 0, item);
-      return copy;
-    });
-    pushHistory(false);
-  }, [pushHistory]);
+  const bringForward = useCallback(
+    (id: string) => {
+      setTexts((prev) => {
+        const idx = prev.findIndex((t) => t.id === id);
+        if (idx < 0 || idx === prev.length - 1) return prev;
+        const copy = [...prev];
+        const [item] = copy.splice(idx, 1);
+        copy.splice(idx + 1, 0, item);
+        return copy;
+      });
+      pushHistory(false);
+    },
+    [pushHistory]
+  );
 
-  const sendBackward = useCallback((id: string) => {
-    setTexts((prev) => {
-      const idx = prev.findIndex((t) => t.id === id);
-      if (idx <= 0) return prev;
-      const copy = [...prev];
-      const [item] = copy.splice(idx, 1);
-      copy.splice(idx - 1, 0, item);
-      return copy;
-    });
-    pushHistory(false);
-  }, [pushHistory]);
+  const sendBackward = useCallback(
+    (id: string) => {
+      setTexts((prev) => {
+        const idx = prev.findIndex((t) => t.id === id);
+        if (idx <= 0) return prev;
+        const copy = [...prev];
+        const [item] = copy.splice(idx, 1);
+        copy.splice(idx - 1, 0, item);
+        return copy;
+      });
+      pushHistory(false);
+    },
+    [pushHistory]
+  );
 
-  const toggleVisibility = useCallback((id: string) => {
-    setTexts((prev) => prev.map((t) => (t.id === id ? { ...t, visible: !t.visible } : t)));
-    pushHistory(false);
-  }, [pushHistory]);
+  const toggleVisibility = useCallback(
+    (id: string) => {
+      setTexts((prev) => prev.map((t) => (t.id === id ? { ...t, visible: !t.visible } : t)));
+      pushHistory(false);
+    },
+    [pushHistory]
+  );
 
-  const toggleLock = useCallback((id: string) => {
-    setTexts((prev) => prev.map((t) => (t.id === id ? { ...t, locked: !t.locked } : t)));
-    pushHistory(false);
-  }, [pushHistory]);
+  const toggleLock = useCallback(
+    (id: string) => {
+      setTexts((prev) => prev.map((t) => (t.id === id ? { ...t, locked: !t.locked } : t)));
+      pushHistory(false);
+    },
+    [pushHistory]
+  );
 
-  const removeLayer = useCallback((id: string) => {
-    setTexts((prev) => prev.filter((t) => t.id !== id));
-    if (selectedId === id) setSelectedId(null);
-    pushHistory();
-  }, [selectedId, pushHistory]);
+  const removeLayer = useCallback(
+    (id: string) => {
+      setTexts((prev) => prev.filter((t) => t.id !== id));
+      if (selectedId === id) setSelectedId(null);
+      pushHistory();
+    },
+    [selectedId, pushHistory]
+  );
 
-  const duplicateLayer = useCallback((id: string) => {
-    setTexts((prev) => {
-      const base = prev.find((t) => t.id === id);
-      if (!base) return prev;
-      const copy = { ...base, id: crypto.randomUUID(), x: base.x + 20, y: base.y + 20 };
-      return [...prev, copy];
-    });
-    pushHistory();
-  }, [pushHistory]);
+  const duplicateLayer = useCallback(
+    (id: string) => {
+      setTexts((prev) => {
+        const base = prev.find((t) => t.id === id);
+        if (!base) return prev;
+        const copy = {
+          ...base,
+          id: crypto.randomUUID(),
+          x: base.x + 20,
+          y: base.y + 20,
+        };
+        return [...prev, copy];
+      });
+      pushHistory();
+    },
+    [pushHistory]
+  );
 
   const selectLayer = useCallback((id: string) => setSelectedId(id), []);
 
   /* -------- mouse (hit test) -------- */
-  const hitTest = useCallback((px: number, py: number): TextNode | null => {
-    const c = canvasRef.current!;
-    const ctx = c.getContext("2d")!;
-    // iterate top-most first
-    for (let i = texts.length - 1; i >= 0; i--) {
-      const node = texts[i];
-      if (!node.visible) continue;
-      ctx.font = `${node.fontWeight} ${node.fontSize}px '${node.fontFamily}', Arial, sans-serif`;
-      const { x, y, w, h } = getNodeBounds(ctx, node);
-      if (px >= x && px <= x + w && py >= y && py <= y + h) {
-        return node;
+  const hitTest = useCallback(
+    (px: number, py: number): TextNode | null => {
+      const c = canvasRef.current!;
+      const ctx = c.getContext("2d")!;
+      // iterate top-most first
+      for (let i = texts.length - 1; i >= 0; i--) {
+        const node = texts[i];
+        if (!node.visible) continue;
+        ctx.font = `${node.fontWeight} ${node.fontSize}px '${node.fontFamily}', Arial, sans-serif`;
+        const { x, y, w, h } = getNodeBounds(ctx, node);
+        if (px >= x && px <= x + w && py >= y && py <= y + h) {
+          return node;
+        }
       }
-    }
-    return null;
-  }, [texts]);
+      return null;
+    },
+    [texts]
+  );
 
-  const onCanvasMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+  const onCanvasMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      const rect = (e.currentTarget as HTMLCanvasElement).getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
 
-    const hit = hitTest(x, y);
-    if (hit) {
-      setSelectedId(hit.id);
-      dragStartRef.current = { pointerX: x, pointerY: y, nodeX: hit.x, nodeY: hit.y };
-    } else {
-      setSelectedId(null);
-      dragStartRef.current = null;
-    }
-  }, [hitTest]);
+      const hit = hitTest(x, y);
+      if (hit) {
+        setSelectedId(hit.id);
+        if (!hit.locked) {
+          dragStartRef.current = {
+            pointerX: x,
+            pointerY: y,
+            nodeX: hit.x,
+            nodeY: hit.y,
+          };
+        } else {
+          dragStartRef.current = null;
+        }
+      } else {
+        setSelectedId(null);
+        dragStartRef.current = null;
+      }
+    },
+    [hitTest]
+  );
 
-  const onCanvasMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!dragStartRef.current || !selectedId) return;
-    const node = texts.find((t) => t.id === selectedId);
-    if (!node || node.locked) return;
+  // *** FIXED: snapshot the ref, don't read it inside setState
+  const onCanvasMouseMove = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      if (!selectedId) return;
 
-    const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+      const drag = dragStartRef.current; // snapshot
+      if (!drag) return;
 
-    const dx = x - dragStartRef.current.pointerX;
-    const dy = y - dragStartRef.current.pointerY;
+      if (!selectedNode || selectedNode.locked) return;
 
-    setTexts((prev) =>
-      prev.map((t) =>
-        t.id === selectedId ? { ...t, x: dragStartRef.current!.nodeX + dx, y: dragStartRef.current!.nodeY + dy } : t
-      )
-    );
-  }, [selectedId, texts]);
+      const rect = (e.currentTarget as HTMLCanvasElement).getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      const dx = x - drag.pointerX;
+      const dy = y - drag.pointerY;
+
+      const nextX = drag.nodeX + dx;
+      const nextY = drag.nodeY + dy;
+
+      setTexts((prev) =>
+        prev.map((t) => (t.id === selectedId ? { ...t, x: nextX, y: nextY } : t))
+      );
+    },
+    [selectedId, selectedNode]
+  );
 
   const onCanvasMouseUp = useCallback(() => {
     if (dragStartRef.current) pushHistory(false);
     dragStartRef.current = null;
+  }, [pushHistory]);
+
+  // Also end drag if mouseup happens outside the canvas
+  useEffect(() => {
+    const onWinMouseUp = () => {
+      if (dragStartRef.current) {
+        pushHistory(false);
+        dragStartRef.current = null;
+      }
+    };
+    window.addEventListener("mouseup", onWinMouseUp);
+    return () => window.removeEventListener("mouseup", onWinMouseUp);
   }, [pushHistory]);
 
   /* -------- keyboard (HTML canvas, no fabric) -------- */
@@ -386,12 +466,14 @@ export function useCanvasEditor() {
     fileInputRef,
 
     // state
-    stage, setStage,
+    stage,
+    setStage,
     bgUrl,
     texts,
     selectedId,
     selectedNode,
-    activePanel, setActivePanel,
+    activePanel,
+    setActivePanel,
 
     // panels & actions
     addText,
@@ -414,7 +496,10 @@ export function useCanvasEditor() {
     reset,
 
     // history
-    history, historyIndex, undo, redo,
+    history,
+    historyIndex,
+    undo,
+    redo,
 
     // canvas events
     onCanvasMouseDown,
