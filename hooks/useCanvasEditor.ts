@@ -15,7 +15,15 @@ import type { SerializableState, StageSize, TextNode } from "@/lib/types";
 
 const START_SIZE: StageSize = { width: 960, height: 540 };
 const MAX_HISTORY = 40;
-const LS_KEY = "itc_canvas_state";
+
+// ---- LocalStorage keys & retention -----------------------------------------
+const LS_STATE_KEY = "itc_canvas_state";          // latest editor state (stage/bg/texts)
+const LS_HISTORY_KEY = "itc_canvas_history";      // array of snapshots
+const LS_HISTORY_IDX_KEY = "itc_canvas_history_i";// current index
+const LS_META_KEY = "itc_canvas_meta";            // metadata (timestamp, version)
+const TEN_MINUTES_MS = 10 * 60 * 1000;            // <-- retention window
+const STORAGE_VERSION = 1;
+// -----------------------------------------------------------------------------
 
 const SNAP_PX = 6;
 
@@ -75,7 +83,18 @@ export function useCanvasEditor() {
       if (next.length > MAX_HISTORY) next.shift();
       setHistory(next);
       setHistoryIndex(next.length - 1);
-      if (saveToLocal) localStorage.setItem(LS_KEY, snap);
+
+      // Keep backward compatibility: optionally write the current state
+      // (Full autosave below will also persist history + state with timestamp)
+      if (saveToLocal) {
+        try {
+          localStorage.setItem(LS_STATE_KEY, snap);
+          localStorage.setItem(
+            LS_META_KEY,
+            JSON.stringify({ ts: Date.now(), v: STORAGE_VERSION })
+          );
+        } catch {}
+      }
     },
     [history, historyIndex, serialize]
   );
@@ -91,6 +110,7 @@ export function useCanvasEditor() {
         img.crossOrigin = "anonymous";
         img.onload = () => {
           bgImageRef.current = img;
+          // if restored from saved snapshot we don't know natural WxH; default to stage
           naturalSizeRef.current = { w: data.stage.width, h: data.stage.height };
           if (canvasRef.current) {
             drawAll({
@@ -115,15 +135,51 @@ export function useCanvasEditor() {
     }
   }, []);
 
+  // ---- Initial restore (only if autosave is fresh within 10 minutes) --------
   useEffect(() => {
-    const saved = localStorage.getItem(LS_KEY);
-    if (saved) {
-      restoreFrom(saved);
-      setHistory([saved]);
-      setHistoryIndex(0);
+    try {
+      const metaRaw = localStorage.getItem(LS_META_KEY);
+      if (!metaRaw) return;
+
+      const meta = JSON.parse(metaRaw) as { ts: number; v: number };
+      if (!meta?.ts || (Date.now() - meta.ts) > TEN_MINUTES_MS || meta.v !== STORAGE_VERSION) {
+        // too old or incompatible; drop everything
+        localStorage.removeItem(LS_STATE_KEY);
+        localStorage.removeItem(LS_HISTORY_KEY);
+        localStorage.removeItem(LS_HISTORY_IDX_KEY);
+        localStorage.removeItem(LS_META_KEY);
+        return;
+      }
+
+      const savedState = localStorage.getItem(LS_STATE_KEY);
+      const savedHist = localStorage.getItem(LS_HISTORY_KEY);
+      const savedIdx = localStorage.getItem(LS_HISTORY_IDX_KEY);
+
+      if (savedState) {
+        restoreFrom(savedState);
+      }
+
+      if (savedHist) {
+        const arr = JSON.parse(savedHist) as string[];
+        setHistory(Array.isArray(arr) ? arr : []);
+      } else if (savedState) {
+        // seed history with at least the current state
+        setHistory([savedState]);
+      }
+
+      if (savedIdx != null) {
+        const idx = parseInt(savedIdx, 10);
+        setHistoryIndex(Number.isFinite(idx) ? idx : (savedState ? 0 : -1));
+      } else {
+        setHistoryIndex(savedState ? 0 : -1);
+      }
+    } catch {
+      // ignore corrupt storage
     }
   }, [restoreFrom]);
+  // ---------------------------------------------------------------------------
 
+  // Redraw on any change
   useEffect(() => {
     const c = canvasRef.current;
     if (!c) return;
@@ -136,6 +192,26 @@ export function useCanvasEditor() {
       snapGuides,
     });
   }, [stage, bgUrl, texts, selectedId, snapGuides]);
+
+  // ---- Debounced AUTOSAVE of state + history (refresh-safe within 10 min) ---
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        const snap = serialize();
+        localStorage.setItem(LS_STATE_KEY, snap);
+        localStorage.setItem(LS_HISTORY_KEY, JSON.stringify(history));
+        localStorage.setItem(LS_HISTORY_IDX_KEY, String(historyIndex));
+        localStorage.setItem(
+          LS_META_KEY,
+          JSON.stringify({ ts: Date.now(), v: STORAGE_VERSION })
+        );
+      } catch {
+        // quota/full – silently ignore
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [serialize, history, historyIndex, stage, bgUrl, texts]);
+  // ---------------------------------------------------------------------------
 
   /* -------- image upload -------- */
   const handleUpload = useCallback(
@@ -285,38 +361,32 @@ export function useCanvasEditor() {
     [pushHistory]
   );
 
-// inside useCanvasEditor.ts
-const reorderLayer = useCallback(
-  (srcId: string, destId: string, placeAfter: boolean) => {
-    setTexts((prev) => {
-      const from = prev.findIndex((t) => t.id === srcId);
-      const to = prev.findIndex((t) => t.id === destId);
-      if (from < 0 || to < 0 || from === to) return prev;
+  const reorderLayer = useCallback(
+    (srcId: string, destId: string, placeAfter: boolean) => {
+      setTexts((prev) => {
+        const from = prev.findIndex((t) => t.id === srcId);
+        const to = prev.findIndex((t) => t.id === destId);
+        if (from < 0 || to < 0 || from === to) return prev;
 
-      const arr = [...prev];
-      const [item] = arr.splice(from, 1);
+        const arr = [...prev];
+        const [item] = arr.splice(from, 1);
 
-      // After removal, indices may shift. Compute correct insert index.
-      let insertAt: number;
+        let insertAt: number;
+        if (from < to) {
+          const destNow = to - 1;
+          insertAt = placeAfter ? destNow + 1 : destNow;
+        } else {
+          insertAt = placeAfter ? to + 1 : to;
+        }
 
-      if (from < to) {
-        // dest shifts left by 1
-        const destNow = to - 1;
-        insertAt = placeAfter ? destNow + 1 : destNow; // after => just after dest, before => at dest
-      } else {
-        // from > to, dest index unchanged
-        insertAt = placeAfter ? to + 1 : to;
-      }
-
-      insertAt = Math.max(0, Math.min(arr.length, insertAt));
-      arr.splice(insertAt, 0, item);
-      return arr;
-    });
-    pushHistory(false);
-  },
-  [pushHistory]
-);
-
+        insertAt = Math.max(0, Math.min(arr.length, insertAt));
+        arr.splice(insertAt, 0, item);
+        return arr;
+      });
+      pushHistory(false);
+    },
+    [pushHistory]
+  );
 
   const toggleVisibility = useCallback(
     (id: string) => {
@@ -390,32 +460,30 @@ const reorderLayer = useCallback(
 
   const hitTest = useCallback(
     (px: number, py: number): { node: TextNode; mode: DragMode } | null => {
-      const c = canvasRef.current!;
-      const ctx = c.getContext("2d")!;
-      for (let i = texts.length - 1; i >= 0; i--) {
-        const node = texts[i];
-        if (!node.visible) continue;
+    const c = canvasRef.current!;
+    const ctx = c.getContext("2d")!;
+    for (let i = texts.length - 1; i >= 0; i--) {
+      const node = texts[i];
+      if (!node.visible) continue;
 
-        // handle hits
-        const { left, right, rotate, cx, cy, w, h } = handleCentersWorld(ctx, node);
-        const hitR = HANDLE_SIZE * 0.75;
-        const pt = { x: px, y: py };
-        if (isNear(pt, left, hitR))   return { node, mode: { kind: "resize-left" } };
-        if (isNear(pt, right, hitR))  return { node, mode: { kind: "resize-right" } };
-        if (isNear(pt, rotate, hitR)) return { node, mode: { kind: "rotate" } };
+      // handle hits
+      const { left, right, rotate, cx, cy, w, h } = handleCentersWorld(ctx, node);
+      const hitR = HANDLE_SIZE * 0.75;
+      const pt = { x: px, y: py };
+      if (isNear(pt, left, hitR))   return { node, mode: { kind: "resize-left" } };
+      if (isNear(pt, right, hitR))  return { node, mode: { kind: "resize-right" } };
+      if (isNear(pt, rotate, hitR)) return { node, mode: { kind: "rotate" } };
 
-        // body hit – rotate pointer into local space and test rect
-        const angle = -((node.angle ?? 0) * DEG);
-        const lx =  (px - cx) * Math.cos(angle) - (py - cy) * Math.sin(angle);
-        const ly =  (px - cx) * Math.sin(angle) + (py - cy) * Math.cos(angle);
-        if (lx >= -w/2 && lx <= w/2 && ly >= -h/2 && ly <= h/2) {
-          return { node, mode: { kind: "move" } };
-        }
+      // body hit – rotate pointer into local space and test rect
+      const angle = -((node.angle ?? 0) * DEG);
+      const lx =  (px - cx) * Math.cos(angle) - (py - cy) * Math.sin(angle);
+      const ly =  (px - cx) * Math.sin(angle) + (py - cy) * Math.cos(angle);
+      if (lx >= -w/2 && lx <= w/2 && ly >= -h/2 && ly <= h/2) {
+        return { node, mode: { kind: "move" } };
       }
-      return null;
-    },
-    [texts]
-  );
+    }
+    return null;
+  }, [texts]);
 
   const onCanvasMouseDown = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -487,7 +555,6 @@ const reorderLayer = useCallback(
         let v = false, hGuide = false, vx = canvasCx, hy = canvasCy;
 
         if (Math.abs(nodeCx - canvasCx) <= SNAP_PX) {
-          // shift so centers match exactly
           nextX += (canvasCx - nodeCx);
           v = true;
         }
@@ -512,12 +579,11 @@ const reorderLayer = useCallback(
           prev.map((t) => (t.id === selectedId ? { ...t, angle: nextAngle } : t))
         );
       } else if (drag.dragMode.kind === "resize-left" || drag.dragMode.kind === "resize-right") {
-        // project pointer delta into local X-axis
         const ctx = canvas.getContext("2d")!;
-        const { cx, cy, w } = getNodeMetrics(ctx, selectedNode);
+        const { cx, cy } = getNodeMetrics(ctx, selectedNode);
         const a = (selectedNode.angle ?? 0) * DEG;
 
-        // current pointer in local space
+        // current pointer in local X
         const lx0 =  (drag.pointerX - cx) * Math.cos(-a) - (drag.pointerY - cy) * Math.sin(-a);
         const lx1 =  (x - cx) * Math.cos(-a) - (y - cy) * Math.sin(-a);
         const dLocalX = lx1 - lx0;
@@ -528,18 +594,10 @@ const reorderLayer = useCallback(
 
         nextWidth = Math.max(80, nextWidth);
 
-        // keep center constant: adjust node.x so the visual center doesn't drift
-        const cxCurrent = cx;
-        const half = nextWidth / 2;
-
-        let nextX: number;
-        if (selectedNode.align === "left") nextX = cxCurrent - half;
-        else if (selectedNode.align === "right") nextX = cxCurrent + half;
-        else nextX = cxCurrent; // center anchoring
-
+        // keep center constant
         setTexts((prev) =>
           prev.map((t) =>
-            t.id === selectedId ? { ...t, boxWidth: nextWidth, x: nextX } : t
+            t.id === selectedId ? { ...t, boxWidth: nextWidth } : t
           )
         );
       }
@@ -650,7 +708,12 @@ const reorderLayer = useCallback(
     setStage(START_SIZE);
     setHistory([]);
     setHistoryIndex(-1);
-    localStorage.removeItem(LS_KEY);
+    try {
+      localStorage.removeItem(LS_STATE_KEY);
+      localStorage.removeItem(LS_HISTORY_KEY);
+      localStorage.removeItem(LS_HISTORY_IDX_KEY);
+      localStorage.removeItem(LS_META_KEY);
+    } catch {}
   }, []);
 
   return {
