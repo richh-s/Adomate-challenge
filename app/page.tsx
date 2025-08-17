@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import AppHeader from "@/features/editor/components/Header/AppHeader";
 import TextControls from "@/features/editor/components/TextPanel/page";
 import LayerPanel from "@/features/editor/components/Panels/LayerPanel";
@@ -16,9 +16,11 @@ import {
   Redo as RedoIcon,
   Trash as TrashIcon,
 } from "lucide-react";
+import ConfirmResetModal from "@/features/editor/ui/ConfirmResetModal";
 
 export default function Page() {
   const editor = useCanvasEditor();
+  const [resetOpen, setResetOpen] = useState(false);
 
   return (
     <div className="flex flex-col w-full flex-1 min-h-0 bg-gray-800 text-white">
@@ -87,7 +89,7 @@ export default function Page() {
             </button>
             <button
               className="p-2 rounded text-red-400 hover:bg-gray-700"
-              onClick={editor.reset}
+              onClick={() => setResetOpen(true)}  // open modal instead of passing editor.reset
               title="Reset Canvas"
             >
               <TrashIcon size={20} />
@@ -174,6 +176,16 @@ export default function Page() {
         }}
         onUndo={editor.undo}
         onRedo={editor.redo}
+      />
+
+      {/* Reset confirm modal */}
+      <ConfirmResetModal
+        open={resetOpen}
+        onClose={() => setResetOpen(false)}
+        onConfirm={() => {
+          editor.reset({ skipConfirm: true }); // bypass legacy confirm
+          setResetOpen(false);
+        }}
       />
     </div>
   );

@@ -404,8 +404,11 @@ export function useEditorState() {
     exportCanvasPNG(off, "image-composition.png");
   }, [bgUrl, texts, stage.width]);
 
-  const reset = useCallback(() => {
-    if (!confirm("Reset the canvas? This will clear everything.")) return;
+  const reset = useCallback((opts?: { skipConfirm?: boolean }) => {
+    if (!opts?.skipConfirm) {
+      // keep the legacy confirm for callers that still rely on it
+      if (!confirm("Reset the canvas? This will clear everything.")) return;
+    }
     setBgUrl(null);
     bgImageRef.current = null;
     naturalSizeRef.current = null;
