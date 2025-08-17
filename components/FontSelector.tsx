@@ -18,19 +18,37 @@ const FontSelector: React.FC<FontSelectorProps> = ({ value = "Open Sans", onChan
   const [open, setOpen] = useState(false);
   const [loaded, setLoaded] = useState<string[]>([]);
 
+  // keep internal state in sync if the prop changes
   useEffect(() => {
+    setSelected(value);
+  }, [value]);
+
+  useEffect(() => {
+    // inject a single Google Fonts stylesheet for the listed families
     const link = document.createElement("link");
     link.rel = "stylesheet";
-    link.href = `https://fonts.googleapis.com/css2?${GOOGLE_FONTS.map(f => `family=${f.replace(/ /g, "+")}`).join("&")}&display=swap`;
+    link.href = `https://fonts.googleapis.com/css2?${GOOGLE_FONTS.map(
+      (f) => `family=${encodeURIComponent(f).replace(/%20/g, "+")}`
+    ).join("&")}&display=swap`;
     document.head.appendChild(link);
-    (async () => {
+
+    // wait (if supported) until browser considers fonts ready, then mark as loaded
+    const load = async () => {
+      const fonts = (document as Document & { fonts?: FontFaceSet }).fonts;
       try {
-        await (document as any).fonts?.ready;
-        setLoaded(GOOGLE_FONTS);
-      } catch {
+        if (fonts?.ready) {
+          await fonts.ready;
+        }
+      } finally {
         setLoaded(GOOGLE_FONTS);
       }
-    })();
+    };
+    void load();
+
+    // cleanup on unmount
+    return () => {
+      if (link.parentNode) link.parentNode.removeChild(link);
+    };
   }, []);
 
   return (
@@ -38,18 +56,28 @@ const FontSelector: React.FC<FontSelectorProps> = ({ value = "Open Sans", onChan
       <label className="block text-sm font-medium">Font Family</label>
       <div className="relative">
         <button
+          type="button"
           className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white flex justify-between items-center"
-          onClick={() => setOpen(!open)}
+          onClick={() => setOpen((v) => !v)}
           style={{ fontFamily: selected }}
+          aria-haspopup="listbox"
+          aria-expanded={open}
         >
-          <span>{selected}</span>
+          <span className="truncate">{selected}</span>
           <ChevronDown size={18} />
         </button>
+
         {open && (
-          <div className="absolute z-10 mt-1 w-full max-h-60 overflow-auto bg-gray-800 border border-gray-600 rounded shadow-lg">
+          <div
+            className="absolute z-10 mt-1 w-full max-h-60 overflow-auto bg-gray-800 border border-gray-600 rounded shadow-lg"
+            role="listbox"
+          >
             {loaded.map((font) => (
               <button
                 key={font}
+                type="button"
+                role="option"
+                aria-selected={font === selected}
                 className="w-full text-left px-3 py-2 hover:bg-gray-700"
                 style={{ fontFamily: font }}
                 onClick={() => {

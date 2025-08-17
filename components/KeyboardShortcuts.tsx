@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import React, { useCallback, useEffect } from "react";
 
 type Props = {
   onDelete: () => void;
@@ -11,6 +11,16 @@ type Props = {
   hasSelection: boolean;
 };
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  const el = target as (HTMLElement | null);
+  if (!el) return false;
+  const tag = el.tagName?.toLowerCase();
+  if (tag === "input" || tag === "textarea" || (el as HTMLElement).isContentEditable) {
+    return true;
+  }
+  return false;
+}
+
 const KeyboardShortcuts: React.FC<Props> = ({
   onDelete,
   onDuplicate,
@@ -19,38 +29,63 @@ const KeyboardShortcuts: React.FC<Props> = ({
   onRedo,
   hasSelection,
 }) => {
-  useEffect(() => {
-    const handle = (e: KeyboardEvent) => {
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      // don't hijack keys while the user is typing in a field
+      if (isEditableTarget(e.target)) return;
+
       const mod = e.ctrlKey || e.metaKey;
 
+      // delete / backspace
       if ((e.key === "Delete" || e.key === "Backspace") && hasSelection) {
         e.preventDefault();
         onDelete();
+        return;
       }
+
+      // duplicate: Cmd/Ctrl + D
       if (mod && e.key.toLowerCase() === "d" && hasSelection) {
         e.preventDefault();
         onDuplicate();
+        return;
       }
-      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key) && hasSelection) {
+
+      // nudging with arrow keys (Shift = 10px)
+      if (
+        hasSelection &&
+        (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight")
+      ) {
         e.preventDefault();
         const step = e.shiftKey ? 10 : 1;
         if (e.key === "ArrowUp") onNudge(0, -step, false);
-        if (e.key === "ArrowDown") onNudge(0, step, false);
-        if (e.key === "ArrowLeft") onNudge(-step, 0, false);
-        if (e.key === "ArrowRight") onNudge(step, 0, false);
+        else if (e.key === "ArrowDown") onNudge(0, step, false);
+        else if (e.key === "ArrowLeft") onNudge(-step, 0, false);
+        else if (e.key === "ArrowRight") onNudge(step, 0, false);
+        return;
       }
+
+      // undo / redo
       if (mod && e.key.toLowerCase() === "z") {
         e.preventDefault();
-        e.shiftKey ? onRedo() : onUndo();
+        if (e.shiftKey) {
+          onRedo();
+        } else {
+          onUndo();
+        }
+        return;
       }
       if (mod && e.key.toLowerCase() === "y") {
         e.preventDefault();
         onRedo();
       }
-    };
-    window.addEventListener("keydown", handle);
-    return () => window.removeEventListener("keydown", handle);
-  }, [hasSelection, onDelete, onDuplicate, onNudge, onUndo, onRedo]);
+    },
+    [hasSelection, onDelete, onDuplicate, onNudge, onUndo, onRedo]
+  );
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleKeyDown]);
 
   return null;
 };
