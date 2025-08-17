@@ -24,6 +24,15 @@ export type TextNode = {
   shadow: Shadow;
   visible: boolean;
   locked: boolean;
+
+  /** Rotation in degrees (0 by default). */
+  angle?: number;
+
+  /**
+   * Optional wrapping width (px). If present and >0, text will reflow.
+   * Resizable with handles on the canvas.
+   */
+  boxWidth?: number | null;
 };
 
 export type SerializableState = {

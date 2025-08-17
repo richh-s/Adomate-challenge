@@ -1,16 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import {
-  ChevronUp,
-  ChevronDown,
-  Eye,
-  EyeOff,
-  Trash2,
-  Copy,
-  Lock,
-  Unlock,
-} from "lucide-react";
+import { ChevronUp, ChevronDown, Eye, EyeOff, Trash2, Copy, Lock, Unlock } from "lucide-react";
 import type { TextNode } from "@/lib/types";
 
 type Props = {
@@ -23,6 +14,7 @@ type Props = {
   onRemove: (id: string) => void;
   onToggleVisibility: (id: string) => void;
   onToggleLock: (id: string) => void;
+  onReorder: (srcId: string, destId: string) => void;
 };
 
 const LayerPanel: React.FC<Props> = ({
@@ -35,8 +27,10 @@ const LayerPanel: React.FC<Props> = ({
   onRemove,
   onToggleVisibility,
   onToggleLock,
+  onReorder,
 }) => {
   const [dragged, setDragged] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
   const [showHidden, setShowHidden] = useState(false);
 
   const visibleLayers = useMemo(
@@ -48,32 +42,36 @@ const LayerPanel: React.FC<Props> = ({
     [layers]
   );
 
-  const onDragStart = (id: string) => setDragged(id);
-  const onDragOver = (e: React.DragEvent) => e.preventDefault();
-  const onDrop = () => setDragged(null);
-
-  // nothing at all if there are truly no layers
-  if (layers.length === 0) return null;
-
-  // helper to compute up/down disabled state against the full stack
   const isTopInAll = (id: string) => layers.findIndex((l) => l.id === id) === layers.length - 1;
   const isBottomInAll = (id: string) => layers.findIndex((l) => l.id === id) === 0;
+
+  const onDragStart = (id: string) => setDragged(id);
+  const onDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault();
+    if (id !== overId) setOverId(id);
+  };
+  const onDrop = (id: string) => {
+    if (dragged && dragged !== id) onReorder(dragged, id);
+    setDragged(null);
+    setOverId(null);
+  };
 
   const renderRow = (layer: TextNode) => {
     const isActive = activeId === layer.id;
     const isLocked = layer.locked;
+    const isOver = overId === layer.id;
 
     return (
       <div
         key={layer.id}
         className={`flex items-center p-2 rounded cursor-pointer ${
           isActive ? "bg-blue-900" : "bg-gray-700 hover:bg-gray-600"
-        } ${dragged === layer.id ? "opacity-50" : ""}`}
+        } ${dragged === layer.id ? "opacity-50" : ""} ${isOver ? "ring-2 ring-purple-400" : ""}`}
         onClick={() => onSelect(layer.id)}
         draggable
         onDragStart={() => onDragStart(layer.id)}
-        onDragOver={onDragOver}
-        onDrop={onDrop}
+        onDragOver={(e) => onDragOver(e, layer.id)}
+        onDrop={() => onDrop(layer.id)}
         title={layer.text}
       >
         <div className="flex-1 min-w-0">
@@ -164,6 +162,8 @@ const LayerPanel: React.FC<Props> = ({
     );
   };
 
+  if (layers.length === 0) return null;
+
   return (
     <div className="p-4">
       <div className="mb-4 flex items-center justify-between">
@@ -181,14 +181,12 @@ const LayerPanel: React.FC<Props> = ({
         )}
       </div>
 
-      {/* visible (non-empty) layers */}
       {visibleLayers.length > 0 ? (
         <div className="space-y-2">{visibleLayers.map(renderRow)}</div>
       ) : (
         <div className="text-sm text-gray-400 mb-2">No visible text layers.</div>
       )}
 
-      {/* hidden/empty section (collapsible) */}
       {showHidden && hiddenLayers.length > 0 && (
         <>
           <div className="mt-4 mb-2 text-xs uppercase tracking-wide text-gray-400">
@@ -199,7 +197,7 @@ const LayerPanel: React.FC<Props> = ({
       )}
 
       <div className="mt-4 text-xs text-gray-400">
-        <p>Tip: Use the up/down buttons to change layer order.</p>
+        <p>Tip: Drag a row to reorder layers.</p>
       </div>
     </div>
   );
