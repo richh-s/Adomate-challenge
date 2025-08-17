@@ -1,4 +1,6 @@
-import React from "react";
+"use client";
+
+import React, { useEffect } from "react";
 import type { TextNode } from "@/features/editor/lib/types";
 
 type Props = {
@@ -11,6 +13,40 @@ type Props = {
 export const ShadowControl: React.FC<Props> = ({
   value, onToggle, onChangeImmediate, onCommit,
 }) => {
+  useEffect(() => {
+    if (!value.enabled) return;
+
+    const vh = window.innerHeight;
+    const doc = document;
+    const docH = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight);
+
+    // Prefer #app-root that we just added in RootLayout
+    const appRoot =
+      (document.getElementById("app-root") as HTMLElement | null) ??
+      (document.getElementById("__next") as HTMLElement | null) ??
+      (document.body.firstElementChild as HTMLElement | null);
+
+    const appH = appRoot ? Math.round(appRoot.getBoundingClientRect().height) : null;
+
+    const bodyOverflow = getComputedStyle(document.body).overflow;
+    const htmlOverflow = getComputedStyle(document.documentElement).overflow;
+
+    const wouldOverflow = docH > vh;
+
+    // eslint-disable-next-line no-console
+    console.warn("[ShadowControl] Shadow enabled → layout status", {
+      viewportHeight: vh,
+      documentScrollHeight: docH,
+      appRootFound: !!appRoot,
+      appRootHeight: appH,
+      htmlOverflow,
+      bodyOverflow,
+      wouldOverflow,
+      tip:
+        "RootLayout uses h-screen + overflow-hidden. Inner rows need min-h-0 and overflow-auto so only panels/canvas scroll.",
+    });
+  }, [value.enabled]);
+
   return (
     <div className="space-y-2 pt-2 border-t border-gray-700">
       <div className="flex items-center justify-between">
@@ -62,7 +98,6 @@ export const ShadowControl: React.FC<Props> = ({
             onChange={(v) => onChangeImmediate({ ...value, blur: v })}
             onCommit={onCommit}
           />
-
           <FieldSlider
             label="Offset X"
             min={-50}
@@ -71,7 +106,6 @@ export const ShadowControl: React.FC<Props> = ({
             onChange={(v) => onChangeImmediate({ ...value, offsetX: v })}
             onCommit={onCommit}
           />
-
           <FieldSlider
             label="Offset Y"
             min={-50}
@@ -110,3 +144,5 @@ const FieldSlider: React.FC<{
     </div>
   </div>
 );
+
+export default ShadowControl;

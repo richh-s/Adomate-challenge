@@ -1,13 +1,17 @@
-
 @import "tailwindcss";
 
-
-html, body {
-  height: 100%;
-  background: var(--body);
-  color: var(--foreground);
-  margin: 0;   /* remove default browser spacing */
-  padding: 0;
+/* Optional: these help, but RootLayout classes above are the hard guarantee */
+html, body, #__next, #app-root {
   height: 100%;
 }
 
+body {
+  margin: 0;
+  background: #1F2937;
+  /* overflow hidden is already on <body> via Tailwind in RootLayout */
+}
+
+/* Ensure flex root can shrink/grow without causing overflow bugs */
+#app-root {
+  min-width: 0;
+}

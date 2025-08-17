@@ -6,7 +6,7 @@ import TextControls from "@/features/editor/components/TextPanel/page";
 import LayerPanel from "@/features/editor/components/Panels/LayerPanel";
 import HistoryPanel from "@/features/editor/components/Panels/HistoryPanel";
 import KeyboardShortcuts from "@/features/editor/components/KeyboardShortcuts";
-import CanvasStage from "@/features/editor/components/CanvasStage/CanvasStage"; 
+import CanvasStage from "@/features/editor/components/CanvasStage/CanvasStage";
 import { useCanvasEditor } from "@/features/editor/hooks/useCanvasEditor";
 import {
   Type as TypeIcon,
@@ -21,7 +21,7 @@ export default function Page() {
   const editor = useCanvasEditor();
 
   return (
-    <div className="flex flex-col w-full h-screen bg-gray-800 text-white">
+    <div className="flex flex-col w-full flex-1 min-h-0 bg-gray-800 text-white">
       {/* Header */}
       <AppHeader
         onPickFile={() => editor.fileInputRef.current?.click()}
@@ -36,7 +36,8 @@ export default function Page() {
         onChange={editor.onFileInputChange}
       />
 
-      <div className="flex flex-1 overflow-hidden bg-[#1F2937]">
+      {/* Main row */}
+      <div className="flex flex-1 min-h-0 overflow-hidden bg-[#1F2937]">
         {/* Side rail */}
         <div className="w-12 flex flex-col items-center py-4 border-r border-[#374151]">
           <button
@@ -94,7 +95,7 @@ export default function Page() {
           </div>
         </div>
 
-        {/* Properties / Panels */}
+        {/* Properties / Panels (scrollable) */}
         <div className="w-64 overflow-y-auto bg-[#1F2937]">
           {editor.activePanel === "text" && (
             <div className="p-4">
@@ -132,7 +133,7 @@ export default function Page() {
               onRemove={editor.removeLayer}
               onToggleVisibility={editor.toggleVisibility}
               onToggleLock={editor.toggleLock}
-              onReorder={editor.reorderLayer} // ✅ DnD reordering
+              onReorder={editor.reorderLayer}
             />
           )}
 
@@ -140,26 +141,26 @@ export default function Page() {
             <HistoryPanel
               history={editor.history}
               historyIndex={editor.historyIndex}
-              onJump={editor.jumpTo} // ✅ no reload; uses in-memory restore
+              onJump={editor.jumpTo}
             />
           )}
         </div>
 
-        {/* Canvas section */}
-        <div className="flex-1 flex items-center justify-center overflow-auto p-4 bg-[#374151]">
+        {/* Canvas section (scrollable area) */}
+        <div className="flex-1 min-h-0 flex items-center justify-center overflow-auto p-4 bg-[#374151]">
           <CanvasStage
             stage={editor.stage}
             canvasRef={editor.canvasRef}
             onMouseDown={editor.onCanvasMouseDown}
             onMouseMove={editor.onCanvasMouseMove}
             onMouseUp={editor.onCanvasMouseUp}
-            displayScale={0.833333} // ≈ your old /1.2 visual size
+            displayScale={0.833333}
             className="canvas-container bg-transparent"
           />
         </div>
       </div>
 
-      {/* Global keyboard shortcuts (delete/duplicate/nudge/undo/redo) */}
+      {/* Global keyboard shortcuts */}
       <KeyboardShortcuts
         hasSelection={!!editor.selectedId}
         onDelete={editor.deleteSelected}
