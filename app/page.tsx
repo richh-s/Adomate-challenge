@@ -120,18 +120,18 @@ export default function Page() {
           )}
 
           {editor.activePanel === "layers" && (
-          <LayerPanel
-          layers={editor.texts}
-          activeId={editor.selectedId}
-          onSelect={editor.selectLayer}
-          onBringForward={editor.bringForward}
-          onSendBackward={editor.sendBackward}
-          onDuplicate={editor.duplicateLayer}
-          onRemove={editor.removeLayer}
-          onToggleVisibility={editor.toggleVisibility}
-          onToggleLock={editor.toggleLock}
-          onReorder={editor.reorderLayer} // NEW
-        />
+      <LayerPanel
+      layers={editor.texts}
+      activeId={editor.selectedId}
+      onSelect={editor.selectLayer}
+      onBringForward={editor.bringForward}
+      onSendBackward={editor.sendBackward}
+      onDuplicate={editor.duplicateLayer}
+      onRemove={editor.removeLayer}
+      onToggleVisibility={editor.toggleVisibility}
+      onToggleLock={editor.toggleLock}
+      onReorder={editor.reorderLayer} // << UPDATED
+    />
           )}
 
           {editor.activePanel === "history" && (

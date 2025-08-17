@@ -12,17 +12,7 @@ type Props = {
   onCenter: () => void;
 };
 
-/**
- * UPDATED TextControls
- * - Adds Rotation controls (angle in degrees).
- * - Adds Text Box Width controls (enables wrapping + resize handles parity).
- * - Small UX tweaks: number inputs next to sliders, "Fit to Text", "Auto width" toggle.
- * - Keeps existing behavior for live updates vs. history commits (save on blur where it matters).
- *
- * NOTE: This expects your TextNode type to include:
- *   - angle?: number   // rotation in degrees (default 0)
- *   - boxWidth?: number | null // px; 0/null => auto (no wrapping)
- */
+
 const TextControls: React.FC<Props> = ({ node, stage, onChange, onCenter }) => {
   const [text, setText] = useState(node.text);
   const [fontSize, setFontSize] = useState(node.fontSize);

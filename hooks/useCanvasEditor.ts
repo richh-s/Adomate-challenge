@@ -285,21 +285,38 @@ export function useCanvasEditor() {
     [pushHistory]
   );
 
-  const reorderLayer = useCallback(
-    (srcId: string, destId: string) => {
-      setTexts((prev) => {
-        const from = prev.findIndex((t) => t.id === srcId);
-        const to = prev.findIndex((t) => t.id === destId);
-        if (from < 0 || to < 0 || from === to) return prev;
-        const copy = [...prev];
-        const [item] = copy.splice(from, 1);
-        copy.splice(to, 0, item); // insert at dest row
-        return copy;
-      });
-      pushHistory(false);
-    },
-    [pushHistory]
-  );
+// inside useCanvasEditor.ts
+const reorderLayer = useCallback(
+  (srcId: string, destId: string, placeAfter: boolean) => {
+    setTexts((prev) => {
+      const from = prev.findIndex((t) => t.id === srcId);
+      const to = prev.findIndex((t) => t.id === destId);
+      if (from < 0 || to < 0 || from === to) return prev;
+
+      const arr = [...prev];
+      const [item] = arr.splice(from, 1);
+
+      // After removal, indices may shift. Compute correct insert index.
+      let insertAt: number;
+
+      if (from < to) {
+        // dest shifts left by 1
+        const destNow = to - 1;
+        insertAt = placeAfter ? destNow + 1 : destNow; // after => just after dest, before => at dest
+      } else {
+        // from > to, dest index unchanged
+        insertAt = placeAfter ? to + 1 : to;
+      }
+
+      insertAt = Math.max(0, Math.min(arr.length, insertAt));
+      arr.splice(insertAt, 0, item);
+      return arr;
+    });
+    pushHistory(false);
+  },
+  [pushHistory]
+);
+
 
   const toggleVisibility = useCallback(
     (id: string) => {

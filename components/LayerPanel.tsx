@@ -14,7 +14,7 @@ type Props = {
   onRemove: (id: string) => void;
   onToggleVisibility: (id: string) => void;
   onToggleLock: (id: string) => void;
-  onReorder: (srcId: string, destId: string) => void;
+  onReorder: (srcId: string, destId: string, placeAfter: boolean) => void; // UPDATED
 };
 
 const LayerPanel: React.FC<Props> = ({
@@ -31,6 +31,7 @@ const LayerPanel: React.FC<Props> = ({
 }) => {
   const [dragged, setDragged] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
+  const [overPos, setOverPos] = useState<"before" | "after" | null>(null);
   const [showHidden, setShowHidden] = useState(false);
 
   const visibleLayers = useMemo(
@@ -45,33 +46,64 @@ const LayerPanel: React.FC<Props> = ({
   const isTopInAll = (id: string) => layers.findIndex((l) => l.id === id) === layers.length - 1;
   const isBottomInAll = (id: string) => layers.findIndex((l) => l.id === id) === 0;
 
-  const onDragStart = (id: string) => setDragged(id);
-  const onDragOver = (e: React.DragEvent, id: string) => {
-    e.preventDefault();
-    if (id !== overId) setOverId(id);
+  const onDragStart = (id: string) => {
+    setDragged(id);
+    setOverId(null);
+    setOverPos(null);
   };
-  const onDrop = (id: string) => {
-    if (dragged && dragged !== id) onReorder(dragged, id);
+
+  const onDragOverRow = (e: React.DragEvent<HTMLDivElement>, id: string) => {
+    e.preventDefault();
+    if (!dragged || dragged === id) {
+      setOverId(null);
+      setOverPos(null);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    const pos = e.clientY < midY ? "before" : "after";
+    setOverId(id);
+    setOverPos(pos);
+  };
+
+  const onDropOnRow = (id: string) => {
+    if (dragged && dragged !== id && overPos) {
+      onReorder(dragged, id, overPos === "after");
+    }
     setDragged(null);
     setOverId(null);
+    setOverPos(null);
+  };
+
+  const onDragEnd = () => {
+    setDragged(null);
+    setOverId(null);
+    setOverPos(null);
+  };
+
+  const rowDropIndicator = (rowId: string) => {
+    if (rowId !== overId || !overPos) return "";
+    return overPos === "before" ? "border-t-2 border-purple-400" : "border-b-2 border-purple-400";
   };
 
   const renderRow = (layer: TextNode) => {
     const isActive = activeId === layer.id;
     const isLocked = layer.locked;
-    const isOver = overId === layer.id;
 
     return (
       <div
         key={layer.id}
-        className={`flex items-center p-2 rounded cursor-pointer ${
-          isActive ? "bg-blue-900" : "bg-gray-700 hover:bg-gray-600"
-        } ${dragged === layer.id ? "opacity-50" : ""} ${isOver ? "ring-2 ring-purple-400" : ""}`}
+        className={`flex items-center p-2 rounded cursor-pointer transition-colors
+          ${isActive ? "bg-blue-900" : "bg-gray-700 hover:bg-gray-600"}
+          ${dragged === layer.id ? "opacity-50" : ""}
+          ${rowDropIndicator(layer.id)}
+        `}
         onClick={() => onSelect(layer.id)}
         draggable
         onDragStart={() => onDragStart(layer.id)}
-        onDragOver={(e) => onDragOver(e, layer.id)}
-        onDrop={() => onDrop(layer.id)}
+        onDragOver={(e) => onDragOverRow(e, layer.id)}
+        onDrop={() => onDropOnRow(layer.id)}
+        onDragEnd={onDragEnd}
         title={layer.text}
       >
         <div className="flex-1 min-w-0">
@@ -197,7 +229,7 @@ const LayerPanel: React.FC<Props> = ({
       )}
 
       <div className="mt-4 text-xs text-gray-400">
-        <p>Tip: Drag a row to reorder layers.</p>
+        <p>Tip: Drag a row to reorder layers. A purple line shows where it will drop (above/below).</p>
       </div>
     </div>
   );
