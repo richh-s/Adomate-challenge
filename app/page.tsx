@@ -1,12 +1,13 @@
 "use client";
 
 import React from "react";
-import AppHeader from "@/components/AppHeader";
-import TextControls from "@/components/TextControls";
-import LayerPanel from "@/components/LayerPanel";
-import HistoryPanel from "@/components/HistoryPanel";
-import KeyboardShortcuts from "@/components/KeyboardShortcuts";
-import { useCanvasEditor } from "@/hooks/useCanvasEditor";
+import AppHeader from "@/features/editor/components/Header/AppHeader";
+import TextControls from "@/features/editor/components/TextPanel/page";
+import LayerPanel from "@/features/editor/components/Panels/LayerPanel";
+import HistoryPanel from "@/features/editor/components/Panels/HistoryPanel";
+import KeyboardShortcuts from "@/features/editor/components/KeyboardShortcuts";
+import CanvasStage from "@/features/editor/components/CanvasStage/CanvasStage"; 
+import { useCanvasEditor } from "@/features/editor/hooks/useCanvasEditor";
 import {
   Type as TypeIcon,
   Layers as LayersIcon,
@@ -21,7 +22,7 @@ export default function Page() {
 
   return (
     <div className="flex flex-col w-full h-screen bg-gray-800 text-white">
-      {/* header now matches canvas area color */}
+      {/* Header */}
       <AppHeader
         onPickFile={() => editor.fileInputRef.current?.click()}
         onExport={editor.exportPNG}
@@ -36,7 +37,7 @@ export default function Page() {
       />
 
       <div className="flex flex-1 overflow-hidden bg-[#1F2937]">
-        {/* side rail with divider */}
+        {/* Side rail */}
         <div className="w-12 flex flex-col items-center py-4 border-r border-[#374151]">
           <button
             className={`p-2 mb-4 rounded ${
@@ -92,7 +93,8 @@ export default function Page() {
             </button>
           </div>
         </div>
-        {/* properties panel (no background, blends with section) */}
+
+        {/* Properties / Panels */}
         <div className="w-64 overflow-y-auto bg-[#1F2937]">
           {editor.activePanel === "text" && (
             <div className="p-4">
@@ -120,60 +122,44 @@ export default function Page() {
           )}
 
           {editor.activePanel === "layers" && (
-      <LayerPanel
-      layers={editor.texts}
-      activeId={editor.selectedId}
-      onSelect={editor.selectLayer}
-      onBringForward={editor.bringForward}
-      onSendBackward={editor.sendBackward}
-      onDuplicate={editor.duplicateLayer}
-      onRemove={editor.removeLayer}
-      onToggleVisibility={editor.toggleVisibility}
-      onToggleLock={editor.toggleLock}
-      onReorder={editor.reorderLayer} // << UPDATED
-    />
+            <LayerPanel
+              layers={editor.texts}
+              activeId={editor.selectedId}
+              onSelect={editor.selectLayer}
+              onBringForward={editor.bringForward}
+              onSendBackward={editor.sendBackward}
+              onDuplicate={editor.duplicateLayer}
+              onRemove={editor.removeLayer}
+              onToggleVisibility={editor.toggleVisibility}
+              onToggleLock={editor.toggleLock}
+              onReorder={editor.reorderLayer} // ✅ DnD reordering
+            />
           )}
 
           {editor.activePanel === "history" && (
             <HistoryPanel
               history={editor.history}
               historyIndex={editor.historyIndex}
-              onJump={(index) => {
-                if (index < 0 || index >= editor.history.length) return;
-                const snap = editor.history[index];
-                window.localStorage.setItem("itc_canvas_state", snap);
-                location.reload();
-              }}
+              onJump={editor.jumpTo} // ✅ no reload; uses in-memory restore
             />
           )}
         </div>
 
-        {/* canvas section */}
+        {/* Canvas section */}
         <div className="flex-1 flex items-center justify-center overflow-auto p-4 bg-[#374151]">
-          <div
+          <CanvasStage
+            stage={editor.stage}
+            canvasRef={editor.canvasRef}
+            onMouseDown={editor.onCanvasMouseDown}
+            onMouseMove={editor.onCanvasMouseMove}
+            onMouseUp={editor.onCanvasMouseUp}
+            displayScale={0.833333} // ≈ your old /1.2 visual size
             className="canvas-container bg-transparent"
-            style={{ width: editor.stage.width / 1.2, height: editor.stage.height / 1.2 }}
-          >
-            <canvas
-              ref={editor.canvasRef}
-              width={editor.stage.width / 1.2}
-              height={editor.stage.height / 1.2}
-              onMouseDown={editor.onCanvasMouseDown}
-              onMouseMove={editor.onCanvasMouseMove}
-              onMouseUp={editor.onCanvasMouseUp}
-              style={{
-                width: editor.stage.width / 1.2,
-                height: editor.stage.height / 1.2,
-                borderRadius: 8,
-                boxShadow: "0 6px 18px rgba(0,0,0,0.20)",
-                backgroundColor: "transparent",
-                cursor: "default",
-              }}
-            />
-          </div>
+          />
         </div>
       </div>
 
+      {/* Global keyboard shortcuts (delete/duplicate/nudge/undo/redo) */}
       <KeyboardShortcuts
         hasSelection={!!editor.selectedId}
         onDelete={editor.deleteSelected}

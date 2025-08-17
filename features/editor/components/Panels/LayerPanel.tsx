@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import { ChevronUp, ChevronDown, Eye, EyeOff, Trash2, Copy, Lock, Unlock } from "lucide-react";
-import type { TextNode } from "@/lib/types";
+import type { TextNode } from "@/features/editor/lib/types";
 
 type Props = {
   layers: TextNode[];
