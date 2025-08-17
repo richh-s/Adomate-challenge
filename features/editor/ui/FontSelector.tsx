@@ -1,18 +1,26 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Search, Upload, Trash2, HardDriveDownload } from "lucide-react";
+import { ChevronDown, HardDriveDownload } from "lucide-react";
+import SearchBar from "./Parts/SearchBar";
+import FontRow from "./Parts/FontRow";
+import UploadFontModal from "./Parts/UploadFontModal";
+import ConfirmDeleteModal from "./ConfirmDeleteModal";
+
 import {
-  restoreCustomFonts, saveFont, deleteFont, loadFontIntoDocument,
-  type CustomFontRecord
-} from "../lib/fonts-db";
+  restoreCustomFonts,
+  saveFont,
+  deleteFont,
+  loadFontIntoDocument,
+  type CustomFontRecord,
+} from "../lib/fonts-db"; 
 
 interface FontSelectorProps {
   value?: string;
   onChange: (fontFamily: string) => void;
 }
 
-const API_KEY = "AIzaSyClJb5bio8gEWF3KWs_lH4oXGeSJ4E0xro"; // your key
+const API_KEY = "AIzaSyClJb5bio8gEWF3KWs_lH4oXGeSJ4E0xro"; // Google Webfonts API key
 
 const FALLBACK_FONTS = [
   "Open Sans","Roboto","Lato","Montserrat","Oswald","Raleway","Playfair Display","Merriweather",
@@ -27,14 +35,17 @@ const FontSelector: React.FC<FontSelectorProps> = ({ value = "Open Sans", onChan
   const [open, setOpen] = useState(false);
   const [familiesRemote, setFamiliesRemote] = useState<string[]>(FALLBACK_FONTS);
 
-  // Custom fonts persisted locally
   const [customFonts, setCustomFonts] = useState<CustomFontRecord[]>([]);
-
-  // Loaded map for hover/preview
   const [loaded, setLoaded] = useState<Record<string, boolean>>({});
   const [query, setQuery] = useState("");
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [toDelete, setToDelete] = useState<CustomFontRecord | null>(null);
 
   // fetch google families (client)
   useEffect(() => {
@@ -48,13 +59,12 @@ const FontSelector: React.FC<FontSelectorProps> = ({ value = "Open Sans", onChan
       .catch(() => {});
   }, []);
 
-  // restore custom fonts from IndexedDB into document.fonts on boot
+  // restore custom fonts on boot
   useEffect(() => {
     (async () => {
       try {
         const recs = await restoreCustomFonts();
         setCustomFonts(recs);
-        // mark loaded
         const m: Record<string, boolean> = {};
         for (const r of recs) m[r.family] = true;
         setLoaded((prev) => ({ ...prev, ...m }));
@@ -95,66 +105,82 @@ const FontSelector: React.FC<FontSelectorProps> = ({ value = "Open Sans", onChan
     void ensureLoaded(value);
   }, [value, ensureLoaded]);
 
-  // pre-load page chunk for previews
+  // pre-load when menu opens
   useEffect(() => {
     if (!open) return;
     familiesRemote.slice(0, 20).forEach((f) => void ensureLoaded(f));
   }, [open, familiesRemote, ensureLoaded]);
 
-  // computed lists with filter + sections
-  const remoteFiltered = familiesRemote.filter((f) => f.toLowerCase().includes(query.toLowerCase()));
-  const customFiltered = customFonts.filter((cf) => cf.family.toLowerCase().includes(query.toLowerCase()));
+  const remoteFiltered = familiesRemote.filter((f) =>
+    f.toLowerCase().includes(query.toLowerCase())
+  );
+  const customFiltered = customFonts.filter((cf) =>
+    cf.family.toLowerCase().includes(query.toLowerCase())
+  );
 
-  // Upload flow
+  // Upload flow (modal-based)
   const onPickFile = () => fileInputRef.current?.click();
   const onFiles = async (files: FileList | null) => {
+    setUploadError(null);
     if (!files || !files[0]) return;
     const file = files[0];
     if (!/\.(ttf|otf|woff2?|TTF|OTF|WOFF2?)$/.test(file.name)) {
-      alert("Please choose a TTF, OTF, WOFF, or WOFF2 file.");
+      setPendingFile(null);
+      setUploadError("Please choose a TTF, OTF, WOFF, or WOFF2 file.");
+      setUploadOpen(true);
       return;
     }
+    setPendingFile(file);
+    setUploadOpen(true);
+  };
 
-    const suggested = file.name.replace(/\.(ttf|otf|woff2?|TTF|OTF|WOFF2?)$/, "");
-    const family = window.prompt("Font family name to use in the editor:", suggested) || suggested;
-    const weight = window.prompt("Weight (e.g. 400, 700):", "400") || "400";
-    const style = "normal";
+  const onUploadSubmit = async (vals: { family: string; weight: string; style: "normal" | "italic" }) => {
+    setUploadError(null);
+    const file = pendingFile;
+    if (!file) return;
 
     try {
-      const rec = await saveFont(file, { family, weight, style });
+      const rec = await saveFont(file, vals);
       await loadFontIntoDocument(rec);
 
       setCustomFonts((prev) => [...prev, rec]);
       setLoaded((m) => ({ ...m, [rec.family]: true }));
 
-      // Select it immediately
       setSelected(rec.family);
       onChange(rec.family);
       setOpen(false);
+      setUploadOpen(false);
+      setPendingFile(null);
     } catch (e) {
       console.error(e);
-      alert("Could not save that font.");
+      setUploadError("Could not save that font.");
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
-  // Delete a custom font
-  const onRemoveCustom = async (id: string) => {
-    const rec = customFonts.find((f) => f.id === id);
+  // Delete (modal-based)
+  const confirmDelete = (rec: CustomFontRecord) => {
+    setToDelete(rec);
+    setConfirmOpen(true);
+  };
+
+  const doDelete = async () => {
+    const rec = toDelete;
     if (!rec) return;
-    if (!confirm(`Remove custom font "${rec.family}"?`)) return;
     try {
-      await deleteFont(id);
-      setCustomFonts((prev) => prev.filter((f) => f.id !== id));
-      // Note: FontFaceSet has no remove(); leave it for this session.
+      await deleteFont(rec.id);
+      setCustomFonts((prev) => prev.filter((f) => f.id !== rec.id));
       if (selected === rec.family) {
         setSelected("Open Sans");
         onChange("Open Sans");
       }
     } catch (e) {
       console.error(e);
-      alert("Could not remove that font.");
+      // Optional: add an error toast if you want
+    } finally {
+      setConfirmOpen(false);
+      setToDelete(null);
     }
   };
 
@@ -189,82 +215,65 @@ const FontSelector: React.FC<FontSelectorProps> = ({ value = "Open Sans", onChan
             className="absolute z-10 mt-1 w-full max-h-80 overflow-auto bg-gray-800 border border-gray-600 rounded shadow-lg"
             role="listbox"
           >
-            {/* search + actions */}
-            <div className="sticky top-0 flex items-center gap-2 bg-gray-800 p-2 border-b border-gray-700">
-              <Search size={16} className="opacity-70" />
-              <input
-                className="w-full bg-transparent outline-none text-sm"
-                placeholder="Search fonts…"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-              <button
-                type="button"
-                className="px-2 py-1 text-xs rounded bg-blue-600 hover:bg-blue-700 flex items-center gap-1"
-                onClick={onPickFile}
-                title="Upload custom font"
-              >
-                <Upload size={14} /> Upload
-              </button>
-            </div>
+            <SearchBar query={query} setQuery={setQuery} onUploadClick={onPickFile} />
 
-            {/* Custom section */}
             {customFiltered.length > 0 && (
               <>
                 <div className="px-3 pt-2 pb-1 text-xs uppercase tracking-wide text-gray-400 flex items-center gap-1">
                   <HardDriveDownload size={12} /> Custom fonts
                 </div>
                 {customFiltered.map((cf) => (
-                  <div key={cf.id} className="flex items-center">
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected={cf.family === selected}
-                      className="flex-1 text-left px-3 py-2 hover:bg-gray-700"
-                      style={{ fontFamily: loaded[cf.family] ? `"${cf.family}", inherit` : "inherit" }}
-                      onClick={async () => {
-                        // ensure it's live in the document (should already be)
-                        try { await loadFontIntoDocument(cf); } catch {}
-                        setLoaded((m) => ({ ...m, [cf.family]: true }));
-                        setSelected(cf.family);
-                        setOpen(false);
-                        onChange(cf.family);
-                      }}
-                    >
-                      {cf.family} <span className="ml-1 text-xs text-gray-400">(local)</span>
-                    </button>
-                    <button
-                      className="px-2 text-gray-300 hover:text-red-400"
-                      title="Remove custom font"
-                      onClick={() => onRemoveCustom(cf.id)}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
+                  <FontRow
+                    key={cf.id}
+                    label={
+                      <>
+                        {cf.family}{" "}
+                        <span className="ml-1 text-xs text-gray-400">(local)</span>
+                      </> as any
+                    }
+                    isSelected={cf.family === selected}
+                    onClick={async () => {
+                      try { await loadFontIntoDocument(cf); } catch {}
+                      setLoaded((m) => ({ ...m, [cf.family]: true }));
+                      setSelected(cf.family);
+                      setOpen(false);
+                      onChange(cf.family);
+                    }}
+                    showDelete
+                    onDelete={() => confirmDelete(cf)}
+                    fontFamily={loaded[cf.family] ? cf.family : undefined}
+                  />
                 ))}
                 <div className="border-t border-gray-700 my-1" />
               </>
             )}
 
-            {/* Google / fallback section */}
             {remoteFiltered.map((font) => (
-              <button
+              <FontRow
                 key={font}
-                type="button"
-                role="option"
-                aria-selected={font === selected}
-                className="w-full text-left px-3 py-2 hover:bg-gray-700"
-                style={{ fontFamily: loaded[font] ? font : "inherit" }}
-                onMouseEnter={() => void ensureLoaded(font)}
+                label={font}
+                isSelected={font === selected}
                 onClick={async () => {
-                  await ensureLoaded(font);
+                  // ensure Google face is loaded
+                  const id = `gf-${font.replace(/\s+/g, "-")}`;
+                  if (!document.getElementById(id)) {
+                    const link = document.createElement("link");
+                    link.id = id;
+                    link.rel = "stylesheet";
+                    const weights = "300;400;500;600;700";
+                    link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(font).replace(/%20/g, "+")}:wght@${weights}&display=swap`;
+                    document.head.appendChild(link);
+                  }
+                  try {
+                    await (document as any).fonts?.load?.(`400 1rem ${font}`);
+                  } catch {}
+                  setLoaded((m) => ({ ...m, [font]: true }));
                   setSelected(font);
                   setOpen(false);
                   onChange(font);
                 }}
-              >
-                {font}
-              </button>
+                fontFamily={loaded[font] ? font : undefined}
+              />
             ))}
 
             {remoteFiltered.length === 0 && customFiltered.length === 0 && (
@@ -273,6 +282,28 @@ const FontSelector: React.FC<FontSelectorProps> = ({ value = "Open Sans", onChan
           </div>
         )}
       </div>
+
+      {/* Upload modal */}
+      <UploadFontModal
+        open={uploadOpen}
+        onClose={() => {
+          setUploadOpen(false);
+          setPendingFile(null);
+          setUploadError(null);
+        }}
+        file={pendingFile}
+        defaultFamily={pendingFile?.name.replace(/\.(ttf|otf|woff2?|TTF|OTF|WOFF2?)$/, "")}
+        onSubmit={onUploadSubmit}
+        error={uploadError}
+      />
+
+      {/* Confirm delete modal */}
+      <ConfirmDeleteModal
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={doDelete}
+        fontFamily={toDelete?.family}
+      />
     </div>
   );
 };
