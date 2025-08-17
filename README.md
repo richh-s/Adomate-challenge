@@ -1,84 +1,83 @@
-Here’s a drop-in **README.md** you can paste at the root of the repo. It covers setup, architecture, trade-offs, bonus points, and known limitations.
-
----
-
-# Image Text Composer (Canvas 2D)
+Image Text Composer (Canvas 2D)
 
 A lightweight, client-side image composer built with Next.js + React + TypeScript and the HTML Canvas 2D API.
 Add text layers to a PNG, drag/resize/rotate with snapping guides, reorder layers, and export a PNG at the original image’s resolution. Includes autosave, undo/redo history, and custom font upload (TTF/OTF/WOFF/WOFF2).
 
----
+✨ Features
 
-## ✨ Features
+Canvas UX
 
-* **Canvas UX**
+Drag to move; snap-to-center with purple vertical/horizontal guides
 
-  * Drag to move; **snap-to-center** with purple vertical/horizontal guides
-  * **Resize** via side handles (supports wrapping width)
-  * **Rotate** via top handle (angle shown/controllable in panel)
-* **Layer management**
+Resize via side handles (supports wrapping width)
 
-  * Select, duplicate, lock, toggle visibility
-  * **Drag-and-drop reordering** (with drop indicator)
-  * Bring forward / send backward buttons
-* **Text styling**
+Rotate via top handle (angle shown/controllable in panel)
 
-  * Font family (Google Fonts + **custom upload**)
-  * Size, weight, color, opacity
-  * Alignment (left/center/right)
-  * Line height, letter spacing
-  * Shadow (color, blur, offsets)
-* **History & persistence**
+Layer management
 
-  * **Undo/redo** (40 snapshots) with visible History panel
-  * **Autosave** to `localStorage` (restores after refresh; 10-minute freshness window)
-  * **Reset** button clears state and storage
-* **Export**
+Select, duplicate, lock, toggle visibility
 
-  * **Preserves original image dimensions** (renders to offscreen canvas at natural size)
-* **Keyboard shortcuts**
+Drag-and-drop reordering (with drop indicator)
 
-  * ⌫/Del delete, ⌘/Ctrl+D duplicate, ⌘/Ctrl+Z / ⇧⌘/Ctrl+Z undo/redo, arrows nudge (⇧ = 10px)
+Bring forward / send backward buttons
 
----
+Text styling
 
-## 🚀 Quick start
+Font family (Google Fonts + custom upload)
 
-### Prereqs
+Size, weight, color, opacity
 
-* Node.js ≥ 18
-* pnpm **or** yarn **or** npm
+Alignment (left/center/right)
 
-### Install & run
+Line height, letter spacing
 
-```bash
+Shadow (color, blur, offsets)
+
+History & persistence
+
+Undo/redo (40 snapshots) with visible History panel
+
+Autosave to localStorage (restores after refresh; 10-minute freshness window)
+
+Reset button clears state and storage
+
+Export
+
+Preserves original image dimensions (renders to offscreen canvas at natural size)
+
+Keyboard shortcuts
+
+⌫/Del delete, ⌘/Ctrl+D duplicate, ⌘/Ctrl+Z / ⇧⌘/Ctrl+Z undo/redo, arrows nudge (⇧ = 10px)
+
+🚀 Quick start
+Prereqs
+
+Node.js ≥ 18
+
+pnpm or yarn or npm
+
+Install & run
 # clone your public repo, then:
 pnpm install       # or: yarn / npm install
 pnpm dev           # or: yarn dev / npm run dev
 
 # open http://localhost:3000
-```
 
-### Build
-
-```bash
+Build
 pnpm build && pnpm start   # Next.js production build
-```
 
-### Optional: Google Web Fonts API key
+Environment variables
 
-The demo uses a hard-coded key for convenience. For production, put your key in an env var and wire it in `features/editor/ui/FontSelector.tsx`.
+The demo uses a hard-coded Google Fonts API key for convenience.
+For production, place your key in .env.local at the project root:
 
-```bash
 # .env.local
-NEXT_PUBLIC_GOOGLE_FONTS_API_KEY=xxxx_your_key_xxxx
-```
+NEXT_PUBLIC_GOOGLE_FONTS_API_KEY=AIzaSyClJb5bio8gEWF3KWs_lH4oXGeSJ4E0xro
 
----
 
-## 🧭 Repository structure (high level)
+Then wire it in features/editor/ui/FontSelector.tsx.
 
-```
+🧭 Repository structure (high level)
 src/
 ├─ app/                     # Next.js app router (page/layout)
 ├─ features/
@@ -90,112 +89,86 @@ src/
 │     ├─ ui/                # FontSelector + modal parts
 │     └─ index.ts           # barrel exports
 └─ styles/                  # global css (tailwind)
-```
 
-> The editor is implemented as a **feature module** (folder-by-feature), separating stateful hooks from pure canvas utilities and presentational components.
+🏗️ Architecture overview
 
----
+Rendering: HTML Canvas 2D; all drawing happens in features/editor/lib/canvas.ts via drawAll().
 
-## 🏗️ Architecture overview
+State:
 
-* **Rendering:** HTML Canvas 2D; all drawing happens in `features/editor/lib/canvas.ts` via `drawAll()`.
+useEditorState — source of truth (stage, nodes, bg, selection, history, autosave, export, reset).
 
-  * Text measurement, letter spacing, wrapping, selection marquee/handles, and snap guides are handled here.
-* **State:** React state + custom hooks:
+useCanvasInteractions — pointer hit-testing, drag/move, rotate, resize, snapping, push history.
 
-  * `useEditorState` — single source of truth (stage, nodes, bg, selection, history, autosave, export, reset).
-  * `useCanvasInteractions` — pointer hit-testing (body/handles), drag/move, rotate, resize, snapping, and pushing history.
-  * `useCanvasEditor` — orchestration hook that combines state + interactions and wires keyboard shortcuts & redraw.
-* **Persistence:**
+useCanvasEditor — orchestration hook wiring state + interactions + keyboard shortcuts & redraw.
 
-  * **Design autosave** via `localStorage` (state + history + timestamp); 10-minute retention window to avoid stale restores.
-  * **Custom fonts** via IndexedDB (`features/editor/lib/fonts-db.ts`). On boot, we restore all saved faces into `document.fonts`.
-* **Export:** Offscreen canvas at the uploaded image’s **natural width/height**. We render the full scene there and download a PNG.
+Persistence:
 
----
+Design autosave to localStorage (with 10-minute freshness).
 
-## 🧪 How to test (manual)
+Custom fonts in IndexedDB (features/editor/lib/fonts-db.ts).
 
-1. **Upload image:** Use a **PNG**. Canvas resizes the display but remembers the image’s natural size for export.
-2. **Add text:** “Add Text Layer” → drag it around.
+Export: Offscreen canvas at the uploaded image’s natural width/height.
 
-   * Drag near the canvas center: it **snaps** and purple crosshair lines appear.
-3. **Transform:**
+🧪 How to test (manual)
 
-   * **Resize** using left/right handles (text wraps when box width > 0).
-   * **Rotate** using the top handle; verify angle in the control panel updates.
-4. **Layering:**
+Upload image: Use a PNG. Canvas rescales for display but remembers natural size for export.
 
-   * Duplicate the layer; drag rows in the Layers panel to reorder (purple drop indicator).
-   * Confirm “Bring forward/Send backward” also change z-order.
-5. **History:**
+Add text: “Add Text Layer” → drag it around; snap guides appear at center.
 
-   * Make a series of changes; use Undo/Redo buttons and keyboard shortcuts.
-   * Open the **History** panel and jump between snapshots.
-6. **Autosave & Reset:**
+Transform: Resize with side handles; rotate with top handle.
 
-   * Refresh the page — state restores (if within the 10-minute freshness window).
-   * Click **Reset** — everything clears; refresh shows a blank editor.
-7. **Fonts:**
+Layering: Duplicate layers; reorder by drag/drop; verify z-order changes.
 
-   * Change Google font; hover in the selector to preview.
-   * **Upload custom font** (TTF/OTF/WOFF/WOFF2) → fill modal → save. It appears under “Custom fonts”.
-   * Delete a custom font; confirm behavior if it was selected.
-8. **Export:**
+History: Undo/redo via buttons or ⌘/Ctrl+Z, ⇧⌘/Ctrl+Z; check History panel.
 
-   * Click **Export**. Inspect the PNG; dimensions should match the original upload’s natural size.
+Autosave & Reset: Refresh restores recent state; Reset clears everything.
 
----
+Fonts: Select Google font; upload and manage custom fonts.
 
-## 🧰 Tech choices & trade-offs
+Export: Export PNG; dimensions should match original upload.
 
-* **Next.js + React + TS:** Fast DX, strict typing, file-based routing. All editing is client-side.
-* **Canvas 2D (not SVG/fabric.js):**
+🧰 Tech choices & trade-offs
 
-  * ✅ Full control, tiny footprint, no heavy runtime dependencies.
-  * ⚠️ Manual hit-testing & transforms; more code, but predictable performance.
-* **Snapshot history in memory (max 40):**
+Canvas 2D (not SVG/fabric.js): Full control, minimal dependencies; manual transforms & hit-testing.
 
-  * ✅ Simple, reliable undo/redo semantics.
-  * ⚠️ Memory grows with snapshot size; for very large images we cap history length.
-* **Autosave to `localStorage` with freshness window:**
+Snapshot history: Simple semantics; capped at 40 for memory balance.
 
-  * ✅ “It just works” restore UX and avoids reopening stale canvases.
-  * ⚠️ Large designs can push storage limits; we debounce writes and cap history.
-* **Custom fonts via IndexedDB + CSS Font Loading:**
+Autosave with freshness window: Prevents stale restores; capped by localStorage limits.
 
-  * ✅ Survives refreshes; no server required.
-  * ⚠️ Removal from `document.fonts` isn’t available; we simply stop listing it and fall back next session.
+Custom fonts: Stored persistently; can’t be unloaded during session.
 
----
+✅ Bonus points implemented
 
-## ✅ Bonus points implemented
+Snap-to-center with guides
 
-* Snap-to-center with visible purple guides (horizontal & vertical)
-* Export at the image’s original dimensions (offscreen render)
-* Transform tools: move, **resize with handles**, **rotate**
-* Layer management: **drag-and-drop reordering**
-* Undo/Redo (≥ 20 steps) with a visible history panel & snapshot jump
-* Autosave + Reset to blank state
-* **Custom font upload** (TTF/OTF/WOFF/WOFF2) with persistence
+Export at original dimensions
 
----
+Resize, rotate, drag layers
 
-## ⚠️ Known limitations / future work
+Drag-and-drop layer reordering
 
-* **Image formats:** Only PNG upload is supported right now.
-* **No zoom/pan** of the canvas yet (would help precision work).
-* **No multi-select** or group transforms.
-* **Approx text metrics:** Letter-spacing & wrap use canvas measurements; real kerning varies per font.
-* **Mobile/touch gestures:** Basic pointer events work, but dedicated touch UX (pinch-zoom/rotate) isn’t implemented.
-* **History model:** Snapshot-based; an operation log would be more memory-efficient for very large projects.
-* **Custom fonts:** Cannot unload from `document.fonts` in the current session; deletion hides from the UI and future sessions.
+Undo/redo with history panel
 
----
+Autosave + Reset
 
-## 📝 Scripts
+Custom font upload (TTF/OTF/WOFF/WOFF2)
 
-```jsonc
+⚠️ Known limitations
+
+Only PNG supported as background
+
+No zoom/pan
+
+No multi-select/group transforms
+
+Approx text metrics (letter-spacing, wrap)
+
+Limited touch UX
+
+Snapshot-based history
+
+📝 Scripts
 {
   "dev": "next dev",
   "build": "next build",
@@ -203,20 +176,9 @@ src/
   "lint": "next lint",
   "typecheck": "tsc --noEmit"
 }
-```
 
----
 
-## 📄 License
+👤 Maintainers
 
-MIT — see `LICENSE` (or update to your preferred license).
+Rahel Samson (@rahel-samson)
 
----
-
-## 👤 Maintainers
-
-* Your Name (@your-handle)
-
----
-
-If you want me to tailor the README to your exact repo name, CI badges, or a different env-var wiring for the Google Fonts API, say the word and I’ll tweak the text accordingly.
