@@ -1,103 +1,193 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import React from "react";
+import AppHeader from "@/components/AppHeader";
+import TextControls from "@/components/TextControls";
+import LayerPanel from "@/components/LayerPanel";
+import HistoryPanel from "@/components/HistoryPanel";
+import KeyboardShortcuts from "@/components/KeyboardShortcuts";
+import { useCanvasEditor } from "@/hooks/useCanvasEditor";
+import {
+  Type as TypeIcon,
+  Layers as LayersIcon,
+  History as HistoryIcon,
+  Undo as UndoIcon,
+  Redo as RedoIcon,
+  Trash as TrashIcon,
+} from "lucide-react";
+
+export default function Page() {
+  const editor = useCanvasEditor();
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <div className="flex flex-col w-full h-screen bg-gray-800 text-white">
+      {/* header now matches canvas area color */}
+      <AppHeader
+        onPickFile={() => editor.fileInputRef.current?.click()}
+        onExport={editor.exportPNG}
+      />
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+      <input
+        ref={editor.fileInputRef}
+        type="file"
+        accept="image/png"
+        className="hidden"
+        onChange={editor.onFileInputChange}
+      />
+
+<div className="flex flex-1 overflow-hidden bg-[#1F2937]">
+  {/* side rail with divider */}
+  <div className="w-12 flex flex-col items-center py-4 border-r border-[#374151]">
+    <button
+      className={`p-2 mb-4 rounded ${
+        editor.activePanel === "text" ? "bg-blue-600" : "hover:bg-gray-700"
+      }`}
+      onClick={() => editor.setActivePanel("text")}
+      title="Text Tools"
+    >
+      <TypeIcon size={20} />
+    </button>
+    <button
+      className={`p-2 mb-4 rounded ${
+        editor.activePanel === "layers" ? "bg-blue-600" : "hover:bg-gray-700"
+      }`}
+      onClick={() => editor.setActivePanel("layers")}
+      title="Layers"
+    >
+      <LayersIcon size={20} />
+    </button>
+    <button
+      className={`p-2 mb-4 rounded ${
+        editor.activePanel === "history" ? "bg-blue-600" : "hover:bg-gray-700"
+      }`}
+      onClick={() => editor.setActivePanel("history")}
+      title="History"
+    >
+      <HistoryIcon size={20} />
+    </button>
+
+    <div className="mt-auto flex flex-col items-center">
+      <button
+        className="p-2 mb-2 rounded hover:bg-gray-700 disabled:opacity-50"
+        onClick={editor.undo}
+        disabled={editor.historyIndex <= 0}
+        title="Undo"
+      >
+        <UndoIcon size={20} />
+      </button>
+      <button
+        className="p-2 mb-2 rounded hover:bg-gray-700 disabled:opacity-50"
+        onClick={editor.redo}
+        disabled={editor.historyIndex >= editor.history.length - 1}
+        title="Redo"
+      >
+        <RedoIcon size={20} />
+      </button>
+      <button
+        className="p-2 rounded text-red-400 hover:bg-gray-700"
+        onClick={editor.reset}
+        title="Reset Canvas"
+      >
+        <TrashIcon size={20} />
+      </button>
+    </div>
+  </div>
+  {/* properties panel (no background, blends with section) */}
+  <div className="w-64 overflow-y-auto bg-[#1F2937]">
+    {editor.activePanel === "text" && (
+      <div className="p-4">
+        <h2 className="text-lg font-semibold mb-4">Text Properties</h2>
+        <button
+          className="w-full py-2 mb-4 bg-blue-600 hover:bg-blue-700 rounded"
+          onClick={editor.addText}
         >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
+          Add Text Layer
+        </button>
+
+        {editor.selectedNode ? (
+          <TextControls
+            node={editor.selectedNode}
+            stage={editor.stage}
+            onChange={editor.updateSelected}
+            onCenter={editor.centerSelected}
           />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+        ) : (
+          <div className="text-gray-400 text-sm">
+            Select a text layer to edit its properties
+          </div>
+        )}
+      </div>
+    )}
+
+    {editor.activePanel === "layers" && (
+      <LayerPanel
+        layers={editor.texts}
+        activeId={editor.selectedId}
+        onSelect={editor.selectLayer}
+        onBringForward={editor.bringForward}
+        onSendBackward={editor.sendBackward}
+        onDuplicate={editor.duplicateLayer}
+        onRemove={editor.removeLayer}
+        onToggleVisibility={editor.toggleVisibility}
+        onToggleLock={editor.toggleLock}
+      />
+    )}
+
+    {editor.activePanel === "history" && (
+      <HistoryPanel
+        history={editor.history}
+        historyIndex={editor.historyIndex}
+        onJump={(index) => {
+          if (index < 0 || index >= editor.history.length) return;
+          const snap = editor.history[index];
+          window.localStorage.setItem("itc_canvas_state", snap);
+          location.reload();
+        }}
+      />
+    )}
+  </div>
+
+  {/* canvas section */}
+  <div className="flex-1 flex items-center justify-center overflow-auto p-4 bg-[#374151]">
+    <div
+      className="canvas-container bg-transparent"
+      style={{ width: editor.stage.width / 2, height: editor.stage.height / 2 }}
+    >
+      <canvas
+        ref={editor.canvasRef}
+        width={editor.stage.width / 2}
+        height={editor.stage.height / 2}
+        onMouseDown={editor.onCanvasMouseDown}
+        onMouseMove={editor.onCanvasMouseMove}
+        onMouseUp={editor.onCanvasMouseUp}
+        style={{
+          width: editor.stage.width / 2,
+          height: editor.stage.height / 2,
+          borderRadius: 8,
+          boxShadow: "0 6px 18px rgba(0,0,0,0.20)",
+          backgroundColor: "transparent",
+          cursor: "default",
+        }}
+      />
+    </div>
+  </div>
+</div>
+
+
+      <KeyboardShortcuts
+        hasSelection={!!editor.selectedId}
+        onDelete={editor.deleteSelected}
+        onDuplicate={editor.duplicateSelected}
+        onNudge={(dx, dy, save) => {
+          if (!editor.selectedId || !editor.selectedNode) return;
+          editor.updateSelected(
+            { x: editor.selectedNode.x + dx, y: editor.selectedNode.y + dy },
+            save
+          );
+        }}
+        onUndo={editor.undo}
+        onRedo={editor.redo}
+      />
     </div>
   );
 }

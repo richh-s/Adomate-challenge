@@ -1,26 +1,72 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
+/* Exact palette mapping per your note */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --header: #1F2937;  /* header color */
+  --rail:   #1F2937;  /* left rail */
+  --panel:  #1F2937;  /* side panel */
+  --card:   #1F2937;  /* image canvas card */
+  --body:   #374151;  /* the rest of the app area */
+
+  --foreground: #f8fafc;
+
+  --primary: #2463EB;
+  --primary-foreground: #ffffff;
+
+  --success: #16803C;
+  --success-foreground: #ffffff;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
+html, body {
+  height: 100%;
+  background: var(--body);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;   /* remove default browser spacing */
+  padding: 0;
+  height: 100%;
 }
+
+/* Header, Sidebar (rail), Properties panel all the same */
+.app-header { background: var(--header); }
+.left-rail  { background: var(--rail); }
+.side-panel { background: var(--panel); color: var(--foreground); }
+
+/* Canvas card matches sidebar color */
+.canvas-elevation {
+  background: var(--card);
+  box-shadow: 0 10px 20px rgba(0,0,0,0.25), 0 20px 40px rgba(0,0,0,0.15);
+  border-radius: 12px;
+}
+
+/* Rail buttons (soft hover, no dividing borders) */
+.rail-btn {
+  padding: 0.5rem;
+  border-radius: 0.375rem;
+  color: rgb(209 213 219); /* slate-300 */
+  transition: all 0.2s;
+}
+.rail-btn:hover {
+  color: white;
+  background-color: rgba(255,255,255,0.06); /* subtle lift on #1F2937 */
+}
+.rail-btn--active {
+  background-color: var(--primary);
+  color: white;
+}
+.rail-btn--active:hover { background-color: var(--primary); }
+
+/* Header pills */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+.pill-blue  { background-color: var(--primary); color: white; }
+.pill-blue:hover  { background-color: #1d4ed8; }
+.pill-green { background-color: var(--success); color: white; }
+.pill-green:hover { background-color: #166534; }
